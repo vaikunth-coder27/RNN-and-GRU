@@ -45,7 +45,7 @@ class Runner(object):
         # --- your code here --- #
         ##########################\
         #print("---->",RNN.predict(self.model,x))
-        y,s= RNN.predict(self.model,x)
+        y,s= self.model.predict(x)
         # print('#######################')
         # print(x)
         # print('#######################')
@@ -54,10 +54,9 @@ class Runner(object):
         # print(d)
         # print('#######################')
         for i in range(len(y)):
-            one_d = make_onehot(d[i],len(y[i]))
+            one_d = make_onehot(d[i],self.model.out_vocab_size)
             #print(np.log(y[i]))
             loss-=np.dot(one_d,np.log(y[i]))
-        
         return loss
 
     def compute_loss_np(self, x, d):
@@ -73,6 +72,9 @@ class Runner(object):
         '''
 
         loss = 0.
+        y,s= self.model.predict(x)
+        one_d = make_onehot(d[0],self.model.out_vocab_size)
+        loss-=np.dot(one_d,np.log(y[-1])) 
 
         ##########################
         # --- your code here --- #
@@ -94,6 +96,9 @@ class Runner(object):
         ##########################
         # --- your code here --- #
         ##########################
+        y,s = self.model.predict(x)
+        if np.argmax(y[-1])==d[0]:
+            return 1
 
         return 0
 
@@ -107,16 +112,14 @@ class Runner(object):
         return mean_loss		average loss over all words in D
         '''
         mean_loss = 0.
-        loss=np.zeros(len(X))
+        w=0
         for i in range(len(X)):
-            out,s = RNN.predict(self.model,X[i])
-            for j in range(len(out)):
-                one_D = make_onehot(D[i][j],len(out[j]))
-                loss[i]-=np.dot(one_D,np.log(out[j]))
-            loss[i]=loss[i]/len(out)
-        mean_loss=np.mean(loss)
+            mean_loss += self.compute_loss(X[i],D[i])
+            w+=len(X[i])
+        mean_loss/=w
         
-
+        # 25,0 step, 0.5 len
+        # 25 2 0.5
         ##########################
         # --- your code here --- #
         ##########################
@@ -413,7 +416,7 @@ if __name__ == "__main__":
         code for training language model.
         change this to different values, or use it to get you started with your own testing class
         '''
-        train_size = 1000
+        train_size = 25000
         dev_size = 1000
         vocab_size = 2000
 
@@ -422,7 +425,7 @@ if __name__ == "__main__":
         lr = float(sys.argv[5])
 
         # get the data set vocabulary
-        vocab = pd.read_table(data_folder + "/vocab.wiki.txt", header=None, sep="\s+", index_col=0,
+        vocab = pd.read_table(data_folder + "\\vocab.wiki.txt", header=None, sep="\s+", index_col=0,
                               names=['count', 'freq'], )
         num_to_word = dict(enumerate(vocab.index[:vocab_size]))
         word_to_num = invert_dict(num_to_word)
@@ -433,12 +436,12 @@ if __name__ == "__main__":
             "Retained %d words from %d (%.02f%% of all tokens)\n" % (
             vocab_size, len(vocab), 100 * (1 - fraction_lost)))
 
-        docs = load_lm_dataset(data_folder + '/wiki-train.txt')
+        docs = load_lm_dataset(data_folder + "\\wiki-train.txt")
         S_train = docs_to_indices(docs, word_to_num, 1, 1)
         X_train, D_train = seqs_to_lmXY(S_train)
 
         # Load the dev set (for tuning hyperparameters)
-        docs = load_lm_dataset(data_folder + '/wiki-dev.txt')
+        docs = load_lm_dataset(data_folder + "\\wiki-dev.txt")
         S_dev = docs_to_indices(docs, word_to_num, 1, 1)
         X_dev, D_dev = seqs_to_lmXY(S_dev)
 
@@ -454,22 +457,62 @@ if __name__ == "__main__":
         ##########################
         # --- your code here --- #
         ##########################
-        RNN_obj = RNN(vocab_size,hdim,vocab_size)
+        RNN_obj = RNN(vocab_size,hdim,out_vocab_size=vocab_size)
         Runner_obj = Runner(RNN_obj)
-        result_loss = Runner_obj.train(X_train,D_train,X_dev,D_dev)
-
-        run_loss = -1
-        adjusted_loss = -1
+        run_loss = Runner_obj.train(X_train,D_train,X_dev,D_dev,learning_rate=lr,back_steps=lookback)
+        with open('rnn.U.npy','wb') as f:
+            np.save(f,RNN_obj.U)
+        with open('rnn.V.npy','wb') as f:
+            np.save(f,RNN_obj.V)
+        with open('rnn.W.npy','wb') as f:
+            np.save(f,RNN_obj.W)
+        adjusted_loss = adjust_loss(run_loss,fracloss=fraction_lost,q=q)
 
         print("Unadjusted: %.03f" % np.exp(run_loss))
         print("Adjusted for missing vocab: %.03f" % np.exp(adjusted_loss))
+
+    if mode == 'test':
+        train_size = 25000
+        dev_size = 1000
+        vocab_size = 2000
+
+        hdim = int(sys.argv[3])
+        lookback = int(sys.argv[4])
+        lr = float(sys.argv[5])
+
+        vocab = pd.read_table(data_folder + "\\vocab.wiki.txt", header=None, sep="\s+", index_col=0,
+                              names=['count', 'freq'], )
+        num_to_word = dict(enumerate(vocab.index[:vocab_size]))
+        word_to_num = invert_dict(num_to_word)
+        fraction_lost = fraq_loss(vocab, word_to_num, vocab_size)
+        print(
+            "Retained %d words from %d (%.02f%% of all tokens)\n" % (
+            vocab_size, len(vocab), 100 * (1 - fraction_lost)))
+
+        docs = load_lm_dataset(data_folder+"\\wiki-test.txt")
+        S_test = docs_to_indices(docs, word_to_num, 1, 1)
+        X_test, D_test = seqs_to_lmXY(S_test)
+        RNN_obj=RNN(vocab_size,hdim=hdim,out_vocab_size=vocab_size)
+        with open('rnn.U.npy','wb') as f:
+            RNN_obj.U = np.load(f)
+        with open('rnn.v.npy','wb') as f:
+            RNN_obj.V = np.load(f)
+        with open('rnn.W.npy','wb') as f:
+            RNN_obj.W = np.load(f)
+        Runner_obj = Runner(RNN_obj)
+
+        run_loss = Runner_obj.compute_loss(X_test,D_test)
+        adjusted_loss = adjust_loss(run_loss,fraction_lost,q)
+        print("Unadjusted: %.03f" % np.exp(run_loss))
+        print("Adjusted for missing vocab: %.03f" % np.exp(adjusted_loss))
+
 
     if mode == "train-np-rnn":
         '''
         starter code for parameter estimation.
         change this to different values, or use it to get you started with your own testing class
         '''
-        train_size = 1000
+        train_size = 10000
         dev_size = 1000
         vocab_size = 2000
 
@@ -478,7 +521,7 @@ if __name__ == "__main__":
         lr = float(sys.argv[5])
 
         # get the data set vocabulary
-        vocab = pd.read_table(data_folder + "/vocab.wiki.txt", header=None, sep="\s+", index_col=0,
+        vocab = pd.read_table(data_folder + "\\vocab.wiki.txt", header=None, sep="\s+", index_col=0,
                               names=['count', 'freq'], )
         num_to_word = dict(enumerate(vocab.index[:vocab_size]))
         word_to_num = invert_dict(num_to_word)
@@ -490,7 +533,7 @@ if __name__ == "__main__":
             vocab_size, len(vocab), 100 * (1 - fraction_lost)))
 
         # load training data
-        sents = load_np_dataset(data_folder + '/wiki-train.txt')
+        sents = load_np_dataset(data_folder + "\\wiki-train.txt")
         S_train = docs_to_indices(sents, word_to_num, 0, 0)
         X_train, D_train = seqs_to_npXY(S_train)
 
@@ -498,7 +541,7 @@ if __name__ == "__main__":
         Y_train = D_train[:train_size]
 
         # load development data
-        sents = load_np_dataset(data_folder + '/wiki-dev.txt')
+        sents = load_np_dataset(data_folder + "\\wiki-dev.txt")
         S_dev = docs_to_indices(sents, word_to_num, 0, 0)
         X_dev, D_dev = seqs_to_npXY(S_dev)
 
@@ -508,8 +551,11 @@ if __name__ == "__main__":
         ##########################
         # --- your code here --- #
         ##########################
-
-        acc = 0.
+        RNN_obj = RNN(vocab_size,hdim,vocab_size)
+        Runner_obj = Runner(RNN_obj)
+        run_loss = Runner_obj.train_np(X_train,Y_train,X_dev,D_dev,learning_rate=lr,back_steps=lookback)
+        
+        acc = Runner_obj.compute_acc_np(X_dev,D_dev)
 
         print("Accuracy: %.03f" % acc)
 
@@ -557,7 +603,11 @@ if __name__ == "__main__":
         ##########################
         # --- your code here --- #
         ##########################
+        GRU_obj = GRU(vocab_size,hdim,vocab_size)
+        Runner_obj = Runner(GRU_obj)
+        run_loss = Runner_obj.train_np(X_train,D_train,X_dev,D_dev,learning_rate=lr,back_steps=lookback)
 
-        acc = 0.
+
+        acc = Runner_obj.compute_acc_np(X_dev,D_dev)
 
         print("Accuracy: %.03f" % acc)
