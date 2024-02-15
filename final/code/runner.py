@@ -452,6 +452,8 @@ if __name__ == "__main__":
         ##########################
         # --- your code here --- #
         ##########################
+        RNN_obj = RNN(vocab_size,hdim,out_vocab_size=vocab_size)
+        Runner_obj = Runner(RNN_obj)
         run_loss = Runner_obj.train(X_train,D_train,X_dev,D_dev,learning_rate=lr,back_steps=lookback)
         with open('rnn.U.npy','wb') as f:
             np.save(f,RNN_obj.U)
