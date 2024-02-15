@@ -64,6 +64,12 @@ class RNN(Model):
 			##########################
 			# --- your code here --- #
 			##########################
+			if t==0:
+				s[t] = sigmoid(np.dot(self.V,make_onehot(x[t],self.vocab_size)))
+			else:
+				s[t] = sigmoid(np.dot(self.V,make_onehot(x[t],self.vocab_size))+np.dot(self.U,s[t-1]))
+			
+			y[t] = softmax(np.dot(self.W,s[t]))
 
 
 		return y, s
@@ -89,6 +95,15 @@ class RNN(Model):
 			##########################
 			# --- your code here --- #
 			##########################
+			one_d = make_onehot(d[t],self.out_vocab_size)
+			deltaout = np.multiply(one_d-y[t],np.ones(self.out_vocab_size))
+			self.deltaW+=np.outer(deltaout,s[t])
+			# delta V
+			sigderivative = np.multiply(s[t],np.ones(s[t].shape)-s[t])
+			deltain = np.multiply(np.dot(np.transpose(self.W),deltaout),sigderivative)
+			self.deltaV += np.outer(deltain,make_onehot(x[t],self.vocab_size))
+			#delta U
+			self.deltaU += np.outer(deltain,s[t-1])
 
 	def acc_deltas_np(self, x, d, y, s):
 		'''
@@ -111,6 +126,16 @@ class RNN(Model):
 		##########################
 		# --- your code here --- #
 		##########################
+		t=len(x)-1
+		one_d = make_onehot(d[0],self.out_vocab_size)
+		deltaout = np.multiply(one_d-y[t],np.ones(self.out_vocab_size))
+		self.deltaW+=np.outer(deltaout,s[t])
+		# delta V
+		sigderivative = np.multiply(s[t],np.ones(s[t].shape)-s[t])
+		deltain = np.multiply(np.dot(np.transpose(self.W),deltaout),sigderivative)
+		self.deltaV += np.outer(deltain,make_onehot(x[t],self.vocab_size))
+		#delta U
+		self.deltaU += np.outer(deltain,s[t-1])
 		
 	def acc_deltas_bptt(self, x, d, y, s, steps):
 		'''
@@ -134,6 +159,25 @@ class RNN(Model):
 			##########################
 			# --- your code here --- #
 			##########################
+			one_d = make_onehot(d[t],self.out_vocab_size)
+			deltaout = np.multiply(one_d-y[t],np.ones(self.out_vocab_size))
+			self.deltaW+=np.outer(deltaout,s[t])
+
+			# delta V
+			sigderivative = np.multiply(s[t],np.ones(s[t].shape)-s[t])
+			deltain = np.multiply(np.dot(np.transpose(self.W),deltaout),sigderivative)
+			self.deltaV += np.outer(deltain,make_onehot(x[t],self.vocab_size))
+			#delta U
+			self.deltaU += np.outer(deltain,s[t-1])
+
+
+			newdelta = np.multiply(np.dot(np.transpose(self.W),deltaout),np.multiply(s[t],np.ones(len(s[t]))-s[t]))
+			for i in range(1,steps+1):
+				if t-i>=0:
+					newdelta = np.multiply(np.dot(np.transpose(self.U),newdelta),np.multiply(s[t-i],np.ones(len(s[t-i]))-s[t-i]))
+					self.deltaV += np.outer(newdelta,make_onehot(x[t-i],self.vocab_size))
+
+					self.deltaU += np.outer(newdelta,s[t-i-1])
 
 
 	def acc_deltas_bptt_np(self, x, d, y, s, steps):
@@ -158,3 +202,24 @@ class RNN(Model):
 		##########################
 		# --- your code here --- #
 		##########################
+		t=len(x)-1
+		# delta W
+		one_d = make_onehot(d[0],self.out_vocab_size)
+		deltaout = np.multiply(one_d-y[t],np.ones(self.out_vocab_size))
+		self.deltaW+=np.outer(deltaout,s[t])
+
+		# delta V
+		sigderivative = np.multiply(s[t],np.ones(s[t].shape)-s[t])
+		deltain = np.multiply(np.dot(np.transpose(self.W),deltaout),sigderivative)
+		self.deltaV += np.outer(deltain,make_onehot(x[t],self.vocab_size))
+		#delta U
+		self.deltaU += np.outer(deltain,s[t-1])
+
+
+		newdelta = np.multiply(np.dot(np.transpose(self.W),deltaout),np.multiply(s[t],np.ones(len(s[t]))-s[t]))
+		for i in range(1,steps+1):
+			if t-i>=0:
+				newdelta = np.multiply(np.dot(np.transpose(self.U),newdelta),np.multiply(s[t-i],np.ones(len(s[t-i]))-s[t-i]))
+				self.deltaV += np.outer(newdelta,make_onehot(x[t-i],self.vocab_size))
+
+				self.deltaU += np.outer(newdelta,s[t-i-1])
