@@ -452,9 +452,17 @@ if __name__ == "__main__":
         ##########################
         # --- your code here --- #
         ##########################
+        run_loss = Runner_obj.train(X_train,D_train,X_dev,D_dev,learning_rate=lr,back_steps=lookback)
+        with open('rnn.U.npy','wb') as f:
+            np.save(f,RNN_obj.U)
+        with open('rnn.V.npy','wb') as f:
+            np.save(f,RNN_obj.V)
+        with open('rnn.W.npy','wb') as f:
+            np.save(f,RNN_obj.W)
+        adjusted_loss = adjust_loss(run_loss,fracloss=fraction_lost,q=q)
 
-        run_loss = -1
-        adjusted_loss = -1
+        # run_loss = -1
+        # adjusted_loss = -1
 
         print("Unadjusted: %.03f" % np.exp(run_loss))
         print("Adjusted for missing vocab: %.03f" % np.exp(adjusted_loss))
@@ -503,8 +511,13 @@ if __name__ == "__main__":
         ##########################
         # --- your code here --- #
         ##########################
+        RNN_obj = RNN(vocab_size,hdim,vocab_size)
+        Runner_obj = Runner(RNN_obj)
+        run_loss = Runner_obj.train_np(X_train,Y_train,X_dev,D_dev,learning_rate=lr,back_steps=lookback)
+        
+        acc = Runner_obj.compute_acc_np(X_dev,D_dev)
 
-        acc = 0.
+        # acc = 0.
 
         print("Accuracy: %.03f" % acc)
 
@@ -552,7 +565,13 @@ if __name__ == "__main__":
         ##########################
         # --- your code here --- #
         ##########################
+        GRU_obj = GRU(vocab_size,hdim,vocab_size)
+        Runner_obj = Runner(GRU_obj)
+        run_loss = Runner_obj.train_np(X_train,D_train,X_dev,D_dev,learning_rate=lr,back_steps=lookback)
 
-        acc = 0.
+
+        acc = Runner_obj.compute_acc_np(X_dev,D_dev)
+
+        # acc = 0.
 
         print("Accuracy: %.03f" % acc)
