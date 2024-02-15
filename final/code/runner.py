@@ -45,6 +45,11 @@ class Runner(object):
         ##########################
         # --- your code here --- #
         ##########################
+        y,s= self.model.predict(x)
+        for i in range(len(y)):
+            one_d = make_onehot(d[i],self.model.out_vocab_size)
+            #print(np.log(y[i]))
+            loss-=np.dot(one_d,np.log(y[i]))
 
         return loss
 
@@ -65,6 +70,9 @@ class Runner(object):
         ##########################
         # --- your code here --- #
         ##########################
+        y,s= self.model.predict(x)
+        one_d = make_onehot(d[0],self.model.out_vocab_size)
+        loss-=np.dot(one_d,np.log(y[-1])) 
 
         return loss
 
@@ -82,6 +90,9 @@ class Runner(object):
         ##########################
         # --- your code here --- #
         ##########################
+        y,s = self.model.predict(x)
+        if np.argmax(y[-1])==d[0]:
+            return 1
 
         return 0
 
@@ -100,6 +111,12 @@ class Runner(object):
         ##########################
         # --- your code here --- #
         ##########################
+        mean_loss = 0.
+        w=0
+        for i in range(len(X)):
+            mean_loss += self.compute_loss(X[i],D[i])
+            w+=len(X[i])
+        mean_loss/=w
 
         return mean_loss
 
